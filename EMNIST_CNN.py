@@ -1,7 +1,6 @@
 """
 CNN ARCHITECTURE EXPERIMENTS
-So sánh chi tiết các kiến trúc CNN khác nhau cho EMNIST Letters
-Mục tiêu: Tìm kiến trúc tối ưu nhất
+So sánh chi tiết các kiến trúc CNN khác nhau cho EMNIST
 """
 
 import emnist
@@ -11,7 +10,6 @@ import seaborn as sns
 import os
 import string
 import pandas as pd
-from tqdm import tqdm
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models
@@ -28,7 +26,7 @@ os.makedirs('experiments/models', exist_ok=True)
 digits = list(string.digits)  # 0-9
 uppercase = list(string.ascii_uppercase)  # A-Z
 lowercase = ['a', 'b', 'd', 'e', 'f', 'g', 'h', 'n', 'q', 'r', 't']
-labels_list = digits + uppercase + lowercase  # Total: 47 classes
+labels_list = uppercase + lowercase # Total: 37 classes (No digits)
 
 print("="*70)
 print("CNN ARCHITECTURE EXPERIMENTS")
@@ -41,14 +39,25 @@ print("\n📦 Loading EMNIST Letters...")
 X_train_raw, y_train_raw = emnist.extract_training_samples('balanced')
 X_test_raw, y_test_raw = emnist.extract_test_samples('balanced')
     
+# Filter out digits (0-9)
+# In EMNIST Balanced: 0-9 are digits, 10-46 are letters
+train_mask = y_train_raw >= 10
+test_mask = y_test_raw >= 10
+
+X_train_raw = X_train_raw[train_mask]
+y_train_raw = y_train_raw[train_mask] - 10 # Shift to 0-36
+
+X_test_raw = X_test_raw[test_mask]
+y_test_raw = y_test_raw[test_mask] - 10 # Shift to 0-36
+
 # Preprocess
 X_train = X_train_raw.reshape(-1, 28, 28, 1).astype('float32') / 255.0
 X_test = X_test_raw.reshape(-1, 28, 28, 1).astype('float32') / 255.0
-y_train = to_categorical(y_train_raw, 47)
-y_test = to_categorical(y_test_raw, 47)
+y_train = to_categorical(y_train_raw, 37)
+y_test = to_categorical(y_test_raw, 37)
 
 print(f"✅ Train: {X_train.shape}, Test: {X_test.shape}")
-print(f"✅ Classes: 47")
+print(f"✅ Classes: 37 (Letters Only)")
 print(f"✅ Label range: {y_train_raw.min()} to {y_train_raw.max()}")
 
 # ==================== ARCHITECTURE DEFINITIONS ====================
@@ -59,7 +68,6 @@ print("="*70)
 # Data Augmentation (Rotation ~30deg, Zoom ~10%)
 data_augmentation = keras.Sequential([
     layers.RandomRotation(0.08),
-    # layers.RandomZoom(0.1),
 ])
 
 def architecture_1_baseline():
@@ -70,7 +78,7 @@ def architecture_1_baseline():
     - ~200K parameters
     """
     model = models.Sequential([
-        data_augmentation,
+        # data_augmentation,
         layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
         layers.BatchNormalization(),
         layers.MaxPooling2D((2, 2)),
@@ -81,180 +89,240 @@ def architecture_1_baseline():
 
         layers.Flatten(),
         layers.Dense(256, activation='relu'),
-        layers.Dropout(0.4),
-        layers.Dense(47, activation='softmax')
+        # layers.Dropout(0.2),
+        layers.Dense(37, activation='softmax')
     ], name='Baseline')
     return model
 
-# def architecture_2_deeper():
-#     """
-#     DEEPER CNN - More conv blocks
-#     - 4 Conv blocks
-#     - More capacity
-#     - ~400K parameters
-#     """
-#     model = models.Sequential([
-#         data_augmentation,
-#         # Block 1
-#         layers.Conv2D(32, (3, 3), padding='same', input_shape=(28, 28, 1)),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.Conv2D(32, (3, 3), padding='same'),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.MaxPooling2D((2, 2)),
-#         layers.Dropout(0.25),
+def architecture_2_deeper():
+    """
+    DEEPER CNN - More conv blocks
+    - 4 Conv blocks
+    - More capacity
+    - ~400K parameters
+    """
+    model = models.Sequential([
+        # data_augmentation,
+        # Block 1
+        layers.Conv2D(32, (3, 3), padding='same', input_shape=(28, 28, 1)),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.Conv2D(32, (3, 3), padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.25),
         
-#         # Block 2
-#         layers.Conv2D(64, (3, 3), padding='same'),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.Conv2D(64, (3, 3), padding='same'),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.MaxPooling2D((2, 2)),
-#         layers.Dropout(0.25),
+        # Block 2
+        layers.Conv2D(64, (3, 3), padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.Conv2D(64, (3, 3), padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.25),
         
-#         # Dense
-#         layers.Flatten(),
-#         layers.Dense(256, activation='relu'),
-#         layers.Dropout(0.5),
-#         layers.Dense(26, activation='softmax')
-#     ], name='Deeper')
-#     return model
+        # Dense
+        layers.Flatten(),
+        layers.Dense(256, activation='relu'),
+        # layers.Dropout(0.5),
+        layers.Dense(37, activation='softmax')
+    ], name='Deeper')
+    return model
 
-# def architecture_3_wider():
-#     """
-#     WIDER CNN - More filters per layer
-#     - 2 Conv blocks but WIDER (128, 256 filters)
-#     - More parameters
-#     - ~1M parameters
-#     """
-#     model = models.Sequential([
-#         data_augmentation,
-#         layers.Conv2D(128, (3, 3), activation='relu', input_shape=(28, 28, 1)),
-#         layers.BatchNormalization(),
-#         layers.MaxPooling2D((2, 2)),
+def architecture_3_wider():
+    """
+    WIDER CNN - More filters per layer
+    - 2 Conv blocks but WIDER (128, 256 filters)
+    - More parameters
+    - ~1M parameters
+    """
+    model = models.Sequential([
+        # data_augmentation,
+        layers.Conv2D(128, (3, 3), activation='relu', input_shape=(28, 28, 1)),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
         
-#         layers.Conv2D(256, (3, 3), activation='relu'),
-#         layers.BatchNormalization(),
-#         layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(256, (3, 3), activation='relu'),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
 
-#         layers.Flatten(),
-#         layers.Dense(512, activation='relu'),
-#         layers.Dropout(0.5),
-#         layers.Dense(26, activation='softmax')
-#     ], name='Wider')
-#     return model
+        layers.Flatten(),
+        layers.Dense(512, activation='relu'),
+        # layers.Dropout(0.5),
+        layers.Dense(37, activation='softmax')
+    ], name='Wider')
+    return model
 
-# def architecture_4_resnet_style():
-#     """
-#     RESNET-STYLE - With residual connections
-#     - Skip connections
-#     - Deeper but stable training
-#     - ~300K parameters
-#     """
-#     inputs = layers.Input(shape=(28, 28, 1))
-#     
-#     # Augmentation
-#     x = data_augmentation(inputs)
-#     
-#     # Initial conv
-#     x = layers.Conv2D(32, (3, 3), padding='same')(x)
-#     x = layers.BatchNormalization()(x)
-#     x = layers.Activation('relu')(x)
-#     
-#     # Residual Block 1
-#     shortcut = x
-#     x = layers.Conv2D(32, (3, 3), padding='same')(x)
-#     x = layers.BatchNormalization()(x)
-#     x = layers.Activation('relu')(x)
-#     x = layers.Conv2D(32, (3, 3), padding='same')(x)
-#     x = layers.BatchNormalization()(x)
-#     x = layers.Add()([x, shortcut])
-#     x = layers.Activation('relu')(x)
-#     x = layers.MaxPooling2D((2, 2))(x)
-#     
-#     # Residual Block 2
-#     shortcut = layers.Conv2D(64, (1, 1), padding='same')(x)
-#     x = layers.Conv2D(64, (3, 3), padding='same')(x)
-#     x = layers.BatchNormalization()(x)
-#     x = layers.Activation('relu')(x)
-#     x = layers.Conv2D(64, (3, 3), padding='same')(x)
-#     x = layers.BatchNormalization()(x)
-#     x = layers.Add()([x, shortcut])
-#     x = layers.Activation('relu')(x)
-#     x = layers.MaxPooling2D((2, 2))(x)
-#     
-#     # Dense
-#     x = layers.Flatten()(x)
-#     x = layers.Dense(256, activation='relu')(x)
-#     x = layers.Dropout(0.5)(x)
-#     outputs = layers.Dense(26, activation='softmax')(x)
-#     
-#     model = models.Model(inputs, outputs, name='ResNet_Style')
-#     return model
+def architecture_4_resnet_style():
+    """
+    RESNET-STYLE - With residual connections
+    - Skip connections
+    - Deeper but stable training
+    - ~300K parameters
+    """
+    inputs = layers.Input(shape=(28, 28, 1))
+    
+    # Augmentation
+    # x = data_augmentation(inputs)
+    x = inputs
+    
+    # Initial conv
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    
+    # Residual Block 1
+    shortcut = x
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Add()([x, shortcut])
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    
+    # Residual Block 2
+    shortcut = layers.Conv2D(64, (1, 1), padding='same')(x)
+    x = layers.Conv2D(64, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(64, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Add()([x, shortcut])
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    
+    # Dense
+    x = layers.Flatten()(x)
+    x = layers.Dense(256, activation='relu')(x)
+    # x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(37, activation='softmax')(x)
+    
+    model = models.Model(inputs, outputs, name='ResNet_Style')
+    return model
 
-# def architecture_5_large_kernels():
-#     """
-#     LARGE KERNELS - Using 5x5 and 7x7 kernels
-#     - Larger receptive field
-#     - Fewer layers needed
-#     - ~500K parameters
-#     """
-#     model = models.Sequential([
-#         data_augmentation,
-#         layers.Conv2D(32, (7, 7), padding='same', input_shape=(28, 28, 1)),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.MaxPooling2D((2, 2)),
+def architecture_7_resnet_deep():
+    """
+    RESNET-DEEPER - More residual blocks
+    - 3 Residual blocks with increasing filters
+    - Deeper feature extraction
+    """
+    inputs = layers.Input(shape=(28, 28, 1))
+    
+    # Augmentation
+    # x = data_augmentation(inputs)
+    x = inputs
+    
+    # Initial conv
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    
+    # Residual Block 1 (32 filters)
+    shortcut = x
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(32, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Add()([x, shortcut])
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    
+    # Residual Block 2 (64 filters)
+    shortcut = layers.Conv2D(64, (1, 1), padding='same')(x)
+    x = layers.Conv2D(64, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(64, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Add()([x, shortcut])
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    
+    # Residual Block 3 (128 filters)
+    shortcut = layers.Conv2D(128, (1, 1), padding='same')(x)
+    x = layers.Conv2D(128, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(128, (3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Add()([x, shortcut])
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    
+    # Dense
+    x = layers.Flatten()(x)
+    x = layers.Dense(512, activation='relu')(x)
+    # x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(37, activation='softmax')(x)
+    
+    model = models.Model(inputs, outputs, name='ResNet_Deep')
+    return model
+
+def architecture_5_large_kernels():
+    """
+    LARGE KERNELS - Using 5x5 and 7x7 kernels
+    - Larger receptive field
+    - Fewer layers needed
+    - ~500K parameters
+    """
+    model = models.Sequential([
+        # data_augmentation,
+        layers.Conv2D(32, (7, 7), padding='same', input_shape=(28, 28, 1)),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling2D((2, 2)),
         
-#         layers.Conv2D(64, (5, 5), padding='same'),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
-#         layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (5, 5), padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling2D((2, 2)),
         
-#         layers.Conv2D(128, (3, 3), padding='same'),
-#         layers.BatchNormalization(),
-#         layers.Activation('relu'),
+        layers.Conv2D(128, (3, 3), padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
         
-#         layers.Flatten(),
-#         layers.Dense(256, activation='relu'),
-#         layers.Dropout(0.5),
-#         layers.Dense(26, activation='softmax')
-#     ], name='Large_Kernels')
-#     return model
+        layers.Flatten(),
+        layers.Dense(256, activation='relu'),
+        # layers.Dropout(0.5),
+        layers.Dense(37, activation='softmax')
+    ], name='Large_Kernels')
+    return model
 
-# def architecture_6_no_batchnorm():
-#     """
-#     NO BATCH NORM - Test impact of BatchNorm
-#     - Same as baseline but without BN
-#     - Compare performance
-#     """
-#     model = models.Sequential([
-#         data_augmentation,
-#         layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
-#         layers.MaxPooling2D((2, 2)),
+def architecture_6_no_batchnorm():
+    """
+    NO BATCH NORM - Test impact of BatchNorm
+    - Same as baseline but without BN
+    - Compare performance
+    """
+    model = models.Sequential([
+        # data_augmentation,
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
+        layers.MaxPooling2D((2, 2)),
         
-#         layers.Conv2D(64, (3, 3), activation='relu'),
-#         layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
 
-#         layers.Flatten(),
-#         layers.Dense(256, activation='relu'),
-#         layers.Dropout(0.4),
-#         layers.Dense(26, activation='softmax')
-#     ], name='No_BatchNorm')
-#     return model
+        layers.Flatten(),
+        layers.Dense(256, activation='relu'),
+        # layers.Dropout(0.4),
+        layers.Dense(37, activation='softmax')
+    ], name='No_BatchNorm')
+    return model
 
-# Dictionary of all architectures
 # Dictionary of all architectures
 ARCHITECTURES = {
     'Baseline': architecture_1_baseline,
-    # 'Deeper': architecture_2_deeper,
-    # 'Wider': architecture_3_wider,
-    # 'ResNet_Style': architecture_4_resnet_style,
-    # 'Large_Kernels': architecture_5_large_kernels,
-    # 'No_BatchNorm': architecture_6_no_batchnorm,
+    'Deeper': architecture_2_deeper,
+    'Wider': architecture_3_wider,
+    'ResNet_Style': architecture_4_resnet_style,
+    'ResNet_Deep': architecture_7_resnet_deep,
+    'Large_Kernels': architecture_5_large_kernels,
+    'No_BatchNorm': architecture_6_no_batchnorm,
 }
 
 print(f"\n📐 Defined {len(ARCHITECTURES)} architectures:")
@@ -262,24 +330,6 @@ for name in ARCHITECTURES.keys():
     print(f"  - {name}")
 
 # ==================== TRAINING FUNCTION ====================
-class TqdmCallback(keras.callbacks.Callback):
-    def on_train_begin(self, logs=None):
-        self.epochs_bar = tqdm(total=self.params['epochs'], desc='Training Progress', position=0)
-        
-    def on_epoch_begin(self, epoch, logs=None):
-        self.batch_bar = tqdm(total=self.params['steps'], desc=f'Epoch {epoch+1}/{self.params["epochs"]}', position=1, leave=False)
-        
-    def on_batch_end(self, batch, logs=None):
-        self.batch_bar.update(1)
-        self.batch_bar.set_postfix(**{k: f"{v:.4f}" for k, v in logs.items()})
-        
-    def on_epoch_end(self, epoch, logs=None):
-        self.batch_bar.close()
-        self.epochs_bar.update(1)
-        self.epochs_bar.set_postfix(val_acc=f"{logs.get('val_accuracy'):.4f}", val_loss=f"{logs.get('val_loss'):.4f}")
-        
-    def on_train_end(self, logs=None):
-        self.epochs_bar.close()
 
 def visualize_performance(history, model, X_test, y_test, name):
     print(f"\n📊 Creating visualizations for {name}...")
@@ -338,8 +388,8 @@ def visualize_performance(history, model, X_test, y_test, name):
     errors = y_true[y_true != y_pred]
     if len(errors) > 0:
         plt.figure(figsize=(12, 6))
-        sns.histplot(errors, bins=range(48), kde=False, color='salmon')
-        plt.xticks(range(47), labels_list)
+        sns.histplot(errors, bins=range(38), kde=False, color='salmon')
+        plt.xticks(range(37), labels_list)
         plt.title(f'{name} - Error Distribution by True Label', fontsize=14, fontweight='bold')
         plt.xlabel('True Label')
         plt.ylabel('Count of Misclassifications')
@@ -376,16 +426,15 @@ def train_and_evaluate(model, name, epochs=15, batch_size=128):
             monitor='val_loss',
             patience=5,
             restore_best_weights=True,
-            verbose=0
+            verbose=1
         ),
         keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.5,
             patience=3,
             min_lr=1e-7,
-            verbose=0
+            verbose=1
         ),
-        TqdmCallback()
     ]
     
     # Train
@@ -396,12 +445,12 @@ def train_and_evaluate(model, name, epochs=15, batch_size=128):
         batch_size=batch_size,
         validation_split=0.1,
         callbacks=callbacks,
-        verbose=0  # Silent training, let TQDM handle output
+        verbose=1
     )
     train_time = time.time() - start_time
     
     # Evaluate
-    test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
+    test_loss, test_acc = model.evaluate(X_test, y_test, verbose=1)
     
     # Visualize Performance (New)
     visualize_performance(history, model, X_test, y_test, name)
@@ -413,7 +462,7 @@ def train_and_evaluate(model, name, epochs=15, batch_size=128):
     
     # Calculate per-class accuracy
     class_accs = []
-    for i in range(47):
+    for i in range(37):
         mask = y_true == i
         if mask.sum() > 0:
             acc = (y_pred[mask] == i).sum() / mask.sum()
@@ -676,19 +725,6 @@ print(f"""
   - experiments/training_curves.png
   - experiments/confusion_matrices_top3.png
   - experiments/models/*.h5 (7 trained models)
-
-🎯 Next Steps:
-  1. Analyze the visualizations
-  2. Pick best architecture for your use case
-  3. Fine-tune hyperparameters of the winner
-  4. Apply data augmentation
-  5. Choose direction: Vietnamese letters OR Sentence recognition
-
-💡 Tips:
-  - Best accuracy not equal to Best model for production
-  - Consider size, speed, accuracy trade-offs
-  - ResNet-style often good for deeper networks
-  - Batch Normalization is almost always beneficial
 """)
 
 print("="*70)

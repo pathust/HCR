@@ -9,7 +9,8 @@ import time
 app = Flask(__name__)
 
 # Load model
-MODEL_PATH = 'experiments/models/Baseline.h5'
+# Load model
+MODEL_PATH = 'experiments/models/ResNet_Deep.h5'
 model = None
 
 def load_model():
@@ -25,17 +26,16 @@ def load_model():
 
 load_model()
 
-# Mapping for EMNIST Balanced (47 classes)
-# 0-9: Digits
-# 10-35: Uppercase (A-Z)
-# 36-46: Lowercase (a, b, d, e, f, g, h, n, q, r, t)
+# Mapping for EMNIST Balanced (37 classes - No Digits)
+# 0-25: Uppercase (A-Z)
+# 26-36: Lowercase (a, b, d, e, f, g, h, n, q, r, t)
 import string
 
 # Define the label list exactly as valid for EMNIST Balanced
 # Note: EMNIST balanced merges some upper/lower classes that look identical (c, i, j, k, l, m, o, p, s, u, v, w, x, y, z)
 # The remaining 11 lowercase letters are:
 LOWERCASE_SUBSET = ['a', 'b', 'd', 'e', 'f', 'g', 'h', 'n', 'q', 'r', 't']
-LABELS = list(string.digits) + list(string.ascii_uppercase) + LOWERCASE_SUBSET
+LABELS = list(string.ascii_uppercase) + LOWERCASE_SUBSET
 
 def get_label(index):
     if 0 <= index < len(LABELS):
